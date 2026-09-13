@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Results as ResultsData } from "@/lib/views";
 import { surfaceLabel } from "@/lib/views";
 import Cta from "@/components/Cta";
@@ -24,11 +26,7 @@ export default function Results({
   const { run, totals, own, rows, bySurface, above, prompts } = results;
 
   return (
-    <div className="lg:grid lg:grid-cols-[210px_1fr] lg:gap-8 lg:items-start">
-      <aside className="mb-6 hidden lg:sticky lg:top-6 lg:mb-0 lg:block">
-        <Cta invite={invite} runId={run.id} variant="sidebar" />
-      </aside>
-
+    <div className="lg:grid lg:grid-cols-[1fr_220px] lg:gap-8 lg:items-start">
       <div>
       <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
         How AI answers describe {run.own_brand}
@@ -207,8 +205,48 @@ export default function Results({
                         <span>{surfaceLabel(a.surface)}</span>
                         <span className={"text-xs font-normal " + tone}>{status}</span>
                       </summary>
-                      <div className="mt-2 max-h-80 overflow-y-auto border-t border-slate-200 pt-2 text-[13px] leading-relaxed whitespace-pre-wrap text-slate-700">
-                        {a.error ? `Couldn't fetch this answer (${a.error}).` : a.answer || "(no answer returned)"}
+                      <div className="mt-2 max-h-[28rem] overflow-y-auto border-t border-slate-200 pt-3">
+                        {a.error ? (
+                          <p className="text-[13px] text-slate-500">Couldn&rsquo;t fetch this answer ({a.error}).</p>
+                        ) : a.noAnswer || !a.answer ? (
+                          <p className="text-[13px] text-slate-500">(no answer returned for this query)</p>
+                        ) : (
+                          <div className="prose prose-sm max-w-none prose-slate prose-a:text-indigo-600 prose-headings:mt-3">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                a: ({ node: _node, ...props }) => (
+                                  <a target="_blank" rel="noopener noreferrer" {...props} />
+                                ),
+                              }}
+                            >
+                              {a.answer}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+                        {a.citations.length > 0 && (
+                          <div className="mt-3 border-t border-slate-100 pt-2">
+                            <p className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">
+                              Sources ({a.citations.length})
+                            </p>
+                            <ol className="mt-1 space-y-1 text-xs">
+                              {a.citations.map((c, ci) => (
+                                <li key={ci} className="truncate">
+                                  <span className="tnum text-slate-400">{ci + 1}.</span>{" "}
+                                  <a
+                                    href={c.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:underline"
+                                  >
+                                    {c.title || c.domain || c.url}
+                                  </a>
+                                  {c.domain && c.title ? <span className="text-slate-400"> · {c.domain}</span> : null}
+                                </li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
                       </div>
                     </details>
                   );
@@ -221,6 +259,10 @@ export default function Results({
 
         <Cta invite={invite} runId={run.id} />
       </div>
+
+      <aside className="mt-8 hidden lg:sticky lg:top-6 lg:mt-0 lg:block">
+        <Cta invite={invite} runId={run.id} variant="sidebar" />
+      </aside>
     </div>
   );
 }

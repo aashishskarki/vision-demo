@@ -33,6 +33,7 @@ export type SurfaceRow = {
 export type CoverageRow = { surface: string; responses: number; extracted: number; noAnswer: number };
 export type AboveRow = { brand: string; times: number };
 
+export type Citation = { url: string; title: string | null; domain: string | null };
 export type PromptAnswer = {
   surface: string;
   answer: string;
@@ -40,6 +41,7 @@ export type PromptAnswer = {
   error: string | null;
   ownNamed: boolean;
   ownPos: number | null;
+  citations: Citation[];
 };
 export type PromptBlock = { text: string; answers: PromptAnswer[] };
 
@@ -192,9 +194,10 @@ export async function getResults(runId: string): Promise<Results | null> {
       error: string | null;
       own_named: boolean | null;
       own_pos: number | null;
+      citations: Citation[] | null;
     }[]
   >`
-    select p.ordinal, p.text as prompt, r.surface, r.raw_text, r.no_answer, r.error,
+    select p.ordinal, p.text as prompt, r.surface, r.raw_text, r.no_answer, r.error, r.citations,
       exists(select 1 from demo_mentions m where m.response_id = r.id and m.is_own) as own_named,
       (select min(m.ordinal_position) from demo_mentions m where m.response_id = r.id and m.is_own) as own_pos
     from demo_prompts p
@@ -217,6 +220,7 @@ export async function getResults(runId: string): Promise<Results | null> {
         error: r.error,
         ownNamed: Boolean(r.own_named),
         ownPos: r.own_pos === null ? null : Number(r.own_pos),
+        citations: Array.isArray(r.citations) ? r.citations : [],
       });
     }
   }

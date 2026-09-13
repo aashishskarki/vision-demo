@@ -165,7 +165,7 @@ function parseLlmResponse(result) {
 function askLlm(surfaceId) {
   const cfg = LLM_SURFACES[surfaceId];
 
-  return async function ask(prompt) {
+  return async function ask(prompt, geo) {
     const body = {
       user_prompt: prompt,
       model_name: cfg.model,
@@ -173,7 +173,7 @@ function askLlm(surfaceId) {
       max_output_tokens: Number(process.env.DFS_MAX_TOKENS ?? 2048),
     };
     if (cfg.force) body.force_web_search = true;
-    if (cfg.geo) body.web_search_country_iso_code = DFS_COUNTRY;
+    if (cfg.geo) body.web_search_country_iso_code = geo?.country ?? DFS_COUNTRY;
 
     const result = await dfsPost(cfg.path, body);
     const { text, citations, fanOut } = parseLlmResponse(result);
@@ -197,7 +197,10 @@ export const askPerplexity = askLlm("perplexity");
 
 // ---------------------------------------------------------------- Gemini
 
-export async function askGemini(prompt) {
+// Gemini grounds to the API key's region; DataForSEO's Gemini endpoint rejects a
+// country code (see note above), so geo is accepted for a uniform signature but
+// not applied here.
+export async function askGemini(prompt, _geo) {
   const model = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -277,10 +280,10 @@ function parseAiElement(items, wanted) {
   return null;
 }
 
-export async function askAiOverview(prompt) {
+export async function askAiOverview(prompt, geo) {
   const result = await dfsPost("serp/google/organic/live/advanced", {
     keyword: prompt,
-    location_name: DFS_LOCATION,
+    location_name: geo?.location ?? DFS_LOCATION,
     language_code: "en",
     device: "desktop",
     load_async_ai_overview: true,
@@ -293,10 +296,10 @@ export async function askAiOverview(prompt) {
   return { text: found.text, citations: dedupe(found.citations) };
 }
 
-export async function askAiMode(prompt) {
+export async function askAiMode(prompt, geo) {
   const result = await dfsPost("serp/google/ai_mode/live/advanced", {
     keyword: prompt,
-    location_name: DFS_LOCATION,
+    location_name: geo?.location ?? DFS_LOCATION,
     language_code: "en",
     device: "desktop",
   });

@@ -19,7 +19,11 @@ export type RunInput = {
   own_brand: string;
   competitors: string[];
   prompts: string[];
+  location?: string | null;
+  country_iso?: string | null;
 };
+
+type Geo = { location: string | null; country: string | null };
 
 export type CreateResult = { runId: string } | { error: string };
 
@@ -31,6 +35,8 @@ type RunRow = {
   total_units: number;
   done_units: number;
   error: string | null;
+  location: string | null;
+  country_iso: string | null;
 };
 
 /**
@@ -58,9 +64,10 @@ export async function createRun(inviteToken: string, input: RunInput): Promise<C
 
   const runId = await sql.begin(async (tx) => {
     const [run] = await tx<{ id: string }[]>`
-      insert into demo_runs (invite_id, website, own_brand, competitors, status, total_units)
+      insert into demo_runs (invite_id, website, own_brand, competitors, status, total_units, location, country_iso)
       values (${invite.id}, ${input.website}, ${input.own_brand},
-              ${sql.array(competitors)}::text[], 'pending', ${total})
+              ${sql.array(competitors)}::text[], 'pending', ${total},
+              ${input.location ?? null}, ${input.country_iso ?? null})
       returning id`;
     for (let i = 0; i < prompts.length; i++) {
       await tx`insert into demo_prompts (run_id, ordinal, text) values (${run.id}, ${i + 1}, ${prompts[i]})`;
@@ -80,7 +87,7 @@ export async function createRun(inviteToken: string, input: RunInput): Promise<C
 export async function processNextUnits(runId: string): Promise<RunStatus> {
   const sql = getSql();
   const [run] = await sql<RunRow[]>`
-    select id, own_brand, competitors, status, total_units, done_units, error
+    select id, own_brand, competitors, status, total_units, done_units, error, location, country_iso
     from demo_runs where id = ${runId}`;
   if (!run) throw new Error("run not found");
   if (run.status === "done" || run.status === "failed") return toStatus(run);
@@ -112,7 +119,8 @@ export async function processNextUnits(runId: string): Promise<RunStatus> {
   }
 
   const client = makeClient();
-  await Promise.all(outstanding.map((surface) => processUnit(sql, client, run, target!, surface)));
+  const geo: Geo = { location: run.location, country: run.country_iso };
+  await Promise.all(outstanding.map((surface) => processUnit(sql, client, run, target!, surface, geo)));
 
   const [{ n }] = await sql<{ n: number }[]>`
     select count(*)::int as n from demo_responses where run_id = ${runId}`;
@@ -130,11 +138,12 @@ async function processUnit(
   client: unknown,
   run: RunRow,
   prompt: { id: string; text: string },
-  surface: string
+  surface: string,
+  geo: Geo
 ) {
   const provider = (PROVIDERS as Record<
     string,
-    { fn: (p: string) => Promise<{ text?: string; citations?: unknown[]; empty?: boolean }> }
+    { fn: (p: string, geo: Geo) => Promise<{ text?: string; citations?: unknown[]; empty?: boolean }> }
   >)[surface];
 
   let text = "";
@@ -143,7 +152,7 @@ async function processUnit(
   let errMsg: string | null = null;
 
   try {
-    const out = await provider.fn(prompt.text);
+    const out = await provider.fn(prompt.text, geo);
     text = out.text ?? "";
     citations = out.citations ?? [];
     noAnswer = Boolean(out.empty);

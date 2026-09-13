@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { COUNTRIES, DEFAULT_ISO } from "@/lib/countries";
 
 const ERRORS: Record<string, string> = {
   already_used: "This demo link has already been used — it's a one-time demo.",
@@ -15,6 +16,7 @@ export default function SetupClient({ token, defaultBrand }: { token: string; de
   const router = useRouter();
   const [website, setWebsite] = useState("");
   const [ownBrand, setOwnBrand] = useState(defaultBrand);
+  const [country, setCountry] = useState(DEFAULT_ISO);
   const [competitors, setCompetitors] = useState<string[]>(["", "", ""]);
   const [prompts, setPrompts] = useState<string[]>(["", "", ""]);
   const [busy, setBusy] = useState(false);
@@ -42,6 +44,7 @@ export default function SetupClient({ token, defaultBrand }: { token: string; de
           token,
           website: website.trim(),
           own_brand: ownBrand.trim(),
+          country,
           competitors: competitors.map((c) => c.trim()).filter(Boolean),
           prompts: cleanPrompts,
         }),
@@ -101,6 +104,23 @@ export default function SetupClient({ token, defaultBrand }: { token: string; de
             />
           </label>
         </div>
+
+        <label className="block text-sm font-medium text-slate-800 sm:max-w-xs">
+          Country
+          <span className="ml-1 font-normal text-slate-400">— where your prospects search</span>
+          <select
+            className={field}
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            disabled={busy}
+          >
+            {COUNTRIES.map((c) => (
+              <option key={c.iso} value={c.iso}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div>
           <p className="text-sm font-medium text-slate-800">Competitors (optional, up to 5)</p>
