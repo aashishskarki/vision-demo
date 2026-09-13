@@ -17,6 +17,9 @@ export async function POST(request: NextRequest) {
   }
   const runId = String(body?.runId ?? "").trim();
   if (!runId) return NextResponse.json({ error: "missing_run" }, { status: 400 });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   try {
     const status = await processNextUnits(runId);
