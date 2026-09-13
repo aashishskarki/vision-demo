@@ -69,17 +69,45 @@ function dfsAuth() {
   return "Basic " + Buffer.from(`${login}:${password}`).toString("base64");
 }
 
-async function dfsPost(path, body) {
-  const res = await fetch(`https://api.dataforseo.com/v3/${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: dfsAuth() },
-    body: JSON.stringify([body]),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(`DataForSEO ${res.status}: ${snippet(json)}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// DataForSEO's 401xx codes are internal/server-side errors (e.g. 40101
+// "Internal SE Server Error") that are transient — a fresh call usually
+// succeeds. Client errors (405xx) are not retried.
+const isTransientDfs = (code) => typeof code === "number" && code >= 40100 && code <= 40199;
+
+async function dfsPost(path, body, attempt = 1) {
+  let res;
+  let json;
+  try {
+    res = await fetch(`https://api.dataforseo.com/v3/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: dfsAuth() },
+      body: JSON.stringify([body]),
+    });
+    json = await res.json();
+  } catch (e) {
+    if (attempt < 2) {
+      await sleep(1500);
+      return dfsPost(path, body, attempt + 1);
+    }
+    throw e;
+  }
+
+  if (!res.ok) {
+    if (res.status >= 500 && attempt < 2) {
+      await sleep(1500);
+      return dfsPost(path, body, attempt + 1);
+    }
+    throw new Error(`DataForSEO ${res.status}: ${snippet(json)}`);
+  }
 
   const task = json.tasks?.[0];
   if (task?.status_code && task.status_code >= 40000) {
+    if (isTransientDfs(task.status_code) && attempt < 2) {
+      await sleep(1500);
+      return dfsPost(path, body, attempt + 1);
+    }
     throw new Error(`DataForSEO task ${task.status_code}: ${task.status_message}`);
   }
   return task?.result?.[0] ?? null;
