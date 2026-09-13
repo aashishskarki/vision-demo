@@ -33,6 +33,16 @@ export type SurfaceRow = {
 export type CoverageRow = { surface: string; responses: number; extracted: number; noAnswer: number };
 export type AboveRow = { brand: string; times: number };
 
+export type PromptAnswer = {
+  surface: string;
+  answer: string;
+  noAnswer: boolean;
+  error: string | null;
+  ownNamed: boolean;
+  ownPos: number | null;
+};
+export type PromptBlock = { text: string; answers: PromptAnswer[] };
+
 export type Results = {
   run: { id: string; website: string; own_brand: string; competitors: string[]; status: string };
   totals: { answers: number; slots: number; brands: number; slotsPerAnswer: number };
@@ -41,6 +51,7 @@ export type Results = {
   bySurface: SurfaceRow[];
   coverage: CoverageRow[];
   above: AboveRow[];
+  prompts: PromptBlock[];
 };
 
 /** Everything the results dashboard needs for one run. */
@@ -170,6 +181,47 @@ export async function getResults(runId: string): Promise<Results | null> {
     order by count(*) desc, min(m.brand)`;
   const above: AboveRow[] = aboveRaw.map((r) => ({ brand: r.brand, times: Number(r.times) }));
 
+  // The prompts and every engine's raw answer — the evidence behind the numbers.
+  const answerRows = await sql<
+    {
+      ordinal: number;
+      prompt: string;
+      surface: string | null;
+      raw_text: string | null;
+      no_answer: boolean | null;
+      error: string | null;
+      own_named: boolean | null;
+      own_pos: number | null;
+    }[]
+  >`
+    select p.ordinal, p.text as prompt, r.surface, r.raw_text, r.no_answer, r.error,
+      exists(select 1 from demo_mentions m where m.response_id = r.id and m.is_own) as own_named,
+      (select min(m.ordinal_position) from demo_mentions m where m.response_id = r.id and m.is_own) as own_pos
+    from demo_prompts p
+    left join demo_responses r on r.prompt_id = p.id
+    where p.run_id = ${runId}
+    order by p.ordinal, r.surface`;
+
+  const promptMap = new Map<string, PromptBlock>();
+  for (const r of answerRows) {
+    let block = promptMap.get(r.prompt);
+    if (!block) {
+      block = { text: r.prompt, answers: [] };
+      promptMap.set(r.prompt, block);
+    }
+    if (r.surface) {
+      block.answers.push({
+        surface: r.surface,
+        answer: r.raw_text ?? "",
+        noAnswer: Boolean(r.no_answer),
+        error: r.error,
+        ownNamed: Boolean(r.own_named),
+        ownPos: r.own_pos === null ? null : Number(r.own_pos),
+      });
+    }
+  }
+  const prompts = [...promptMap.values()];
+
   return {
     run: {
       id: run.id,
@@ -189,5 +241,6 @@ export async function getResults(runId: string): Promise<Results | null> {
     bySurface,
     coverage,
     above,
+    prompts,
   };
 }

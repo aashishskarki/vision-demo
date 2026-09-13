@@ -21,10 +21,15 @@ export default function Results({
   results: ResultsData;
   invite: { name: string; email: string; company: string };
 }) {
-  const { run, totals, own, rows, bySurface, above } = results;
+  const { run, totals, own, rows, bySurface, above, prompts } = results;
 
   return (
-    <div>
+    <div className="lg:grid lg:grid-cols-[210px_1fr] lg:gap-8 lg:items-start">
+      <aside className="mb-6 hidden lg:sticky lg:top-6 lg:mb-0 lg:block">
+        <Cta invite={invite} runId={run.id} variant="sidebar" />
+      </aside>
+
+      <div>
       <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
         How AI answers describe {run.own_brand}
       </h1>
@@ -170,7 +175,52 @@ export default function Results({
         </section>
       )}
 
-      <Cta invite={invite} runId={run.id} />
+      {/* prompts & answers — the evidence behind every number */}
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold tracking-tight text-slate-900">Prompts &amp; answers</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Exactly what each engine said. Expand any answer to read it in full.
+        </p>
+        <div className="mt-3 space-y-6">
+          {prompts.map((p, pi) => (
+            <div key={pi} className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-[13px] font-semibold text-slate-900">
+                <span className="text-slate-400">Q{pi + 1}.</span> {p.text}
+              </p>
+              <div className="mt-3 space-y-2">
+                {p.answers.map((a, ai) => {
+                  const status = a.error
+                    ? "engine error"
+                    : a.noAnswer
+                      ? "no answer"
+                      : a.ownNamed
+                        ? `named ${run.own_brand}${a.ownPos ? ` at #${a.ownPos}` : ""}`
+                        : `did not name ${run.own_brand}`;
+                  const tone = a.ownNamed
+                    ? "text-indigo-700"
+                    : a.error || a.noAnswer
+                      ? "text-slate-400"
+                      : "text-slate-500";
+                  return (
+                    <details key={ai} className="group rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      <summary className="flex cursor-pointer items-center justify-between gap-3 text-[13px] font-medium text-slate-800 marker:content-['']">
+                        <span>{surfaceLabel(a.surface)}</span>
+                        <span className={"text-xs font-normal " + tone}>{status}</span>
+                      </summary>
+                      <div className="mt-2 max-h-80 overflow-y-auto border-t border-slate-200 pt-2 text-[13px] leading-relaxed whitespace-pre-wrap text-slate-700">
+                        {a.error ? `Couldn't fetch this answer (${a.error}).` : a.answer || "(no answer returned)"}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+        <Cta invite={invite} runId={run.id} />
+      </div>
     </div>
   );
 }
