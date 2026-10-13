@@ -4,7 +4,8 @@
 -- Kraftshala tool, there is no weekly cadence, no fixed entity registry and no
 -- Supabase Auth: access is gated by a one-time invite token, and every table is
 -- reached only from the demo app's server routes over the pooled connection.
--- RLS is therefore left off; do NOT expose the anon key to a browser client.
+-- Migration 003 turns RLS on with no policies so the Data API cannot reach them;
+-- do NOT expose the anon key to a browser client.
 
 begin;
 
